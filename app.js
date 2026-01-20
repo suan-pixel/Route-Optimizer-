@@ -11,6 +11,7 @@ const state = {
     startLocation: null,
     destinations: [],
     returnToStart: true,
+    departureTime: null,
     map: null,
     routeLayer: null,
     markersLayer: null,
@@ -32,6 +33,9 @@ const elements = {
     addDestinationBtn: document.getElementById('addDestinationBtn'),
     destinationsList: document.getElementById('destinationsList'),
     returnToStartCheckbox: document.getElementById('returnToStart'),
+    useDepartureTimeCheckbox: document.getElementById('useDepartureTime'),
+    departureTimeContainer: document.getElementById('departureTimeContainer'),
+    departureTimeInput: document.getElementById('departureTime'),
     optimizeBtn: document.getElementById('optimizeBtn'),
     resultsSection: document.getElementById('resultsSection'),
     optimizedTime: document.getElementById('optimizedTime'),
@@ -55,8 +59,15 @@ function initializeApp() {
     elements.detectLocationBtn.addEventListener('click', detectUserLocation);
     elements.addDestinationBtn.addEventListener('click', addDestination);
     elements.returnToStartCheckbox.addEventListener('change', handleReturnToStartChange);
+    elements.useDepartureTimeCheckbox.addEventListener('change', handleDepartureTimeToggle);
+    elements.departureTimeInput.addEventListener('change', handleDepartureTimeChange);
     elements.optimizeBtn.addEventListener('click', optimizeRoute);
     elements.openInMapsBtn.addEventListener('click', openInGoogleMaps);
+    
+    // Set default departure time to now + 15 minutes
+    const now = new Date();
+    now.setMinutes(now.getMinutes() + 15);
+    elements.departureTimeInput.value = now.toISOString().slice(0, 16);
     
     // Start location input with autocomplete
     setupAutocomplete(elements.startLocationInput, elements.startSuggestions, (location) => {
@@ -491,6 +502,27 @@ function handleReturnToStartChange(e) {
 }
 
 // ===================================
+// Departure Time
+// ===================================
+
+function handleDepartureTimeToggle(e) {
+    const isEnabled = e.target.checked;
+    elements.departureTimeContainer.style.display = isEnabled ? 'block' : 'none';
+    
+    if (isEnabled) {
+        state.departureTime = elements.departureTimeInput.value ? new Date(elements.departureTimeInput.value) : null;
+    } else {
+        state.departureTime = null;
+    }
+}
+
+function handleDepartureTimeChange(e) {
+    if (elements.useDepartureTimeCheckbox.checked && e.target.value) {
+        state.departureTime = new Date(e.target.value);
+    }
+}
+
+// ===================================
 // Update Optimize Button
 // ===================================
 
@@ -912,8 +944,15 @@ function openInGoogleMaps() {
     
     url += `/${destination}`;
     
-    // Open in new tab
+    // Add departure time if set (Google Maps uses travelmode and departure time)
+    if (state.departureTime) {
+        const timestamp = Math.floor(state.departureTime.getTime() / 1000);
+        url += `?travelmode=driving`;
+    }
+    
+    // Open in new tab - Google Maps will show real-time traffic
     window.open(url, '_blank');
+    showToast('Opening Google Maps with traffic data...', 'success');
 }
 
 // ===================================

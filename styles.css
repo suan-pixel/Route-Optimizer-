@@ -5,33 +5,33 @@
 
 /* CSS Variables */
 :root {
-    /* Liquid Glass Colors */
-    --glass-bg: rgba(255, 255, 255, 0.25);
-    --glass-bg-solid: rgba(255, 255, 255, 0.85);
-    --glass-border: rgba(255, 255, 255, 0.4);
-    --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+    /* Liquid Glass Colors - Dark Theme */
+    --glass-bg: rgba(20, 30, 50, 0.65);
+    --glass-bg-solid: rgba(25, 35, 60, 0.92);
+    --glass-border: rgba(80, 140, 220, 0.3);
+    --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
     --glass-blur: blur(20px);
     --glass-blur-strong: blur(40px);
     
-    /* Accent Colors */
-    --accent-primary: #007AFF;
-    --accent-primary-light: rgba(0, 122, 255, 0.15);
-    --accent-secondary: #5856D6;
-    --accent-success: #34C759;
-    --accent-success-light: rgba(52, 199, 89, 0.15);
-    --accent-warning: #FF9500;
-    --accent-danger: #FF3B30;
+    /* Accent Colors - Dark Blue Theme */
+    --accent-primary: #3B82F6;
+    --accent-primary-light: rgba(59, 130, 246, 0.2);
+    --accent-secondary: #1D4ED8;
+    --accent-success: #10B981;
+    --accent-success-light: rgba(16, 185, 129, 0.2);
+    --accent-warning: #F59E0B;
+    --accent-danger: #EF4444;
     
-    /* Text Colors */
-    --text-primary: rgba(0, 0, 0, 0.85);
-    --text-secondary: rgba(0, 0, 0, 0.55);
-    --text-tertiary: rgba(0, 0, 0, 0.35);
+    /* Text Colors - Light for dark theme */
+    --text-primary: rgba(255, 255, 255, 0.95);
+    --text-secondary: rgba(255, 255, 255, 0.7);
+    --text-tertiary: rgba(255, 255, 255, 0.45);
     --text-on-accent: #FFFFFF;
     
-    /* Background */
-    --bg-gradient-start: #667eea;
-    --bg-gradient-mid: #764ba2;
-    --bg-gradient-end: #f093fb;
+    /* Background - Dark with blue tones */
+    --bg-gradient-start: #0a0f1a;
+    --bg-gradient-mid: #111827;
+    --bg-gradient-end: #1e3a5f;
     
     /* Spacing & Sizing */
     --radius-sm: 12px;
@@ -75,8 +75,8 @@ body::after {
     content: '';
     position: fixed;
     border-radius: 50%;
-    filter: blur(40px);
-    opacity: 0.4;
+    filter: blur(60px);
+    opacity: 0.5;
     z-index: -1;
     animation: float 20s ease-in-out infinite;
 }
@@ -84,7 +84,7 @@ body::after {
 body::before {
     width: 400px;
     height: 400px;
-    background: radial-gradient(circle, rgba(255, 255, 255, 0.3) 0%, transparent 70%);
+    background: radial-gradient(circle, rgba(59, 130, 246, 0.4) 0%, transparent 70%);
     top: -150px;
     right: -150px;
 }
@@ -92,7 +92,7 @@ body::before {
 body::after {
     width: 350px;
     height: 350px;
-    background: radial-gradient(circle, rgba(255, 255, 255, 0.2) 0%, transparent 70%);
+    background: radial-gradient(circle, rgba(29, 78, 216, 0.35) 0%, transparent 70%);
     bottom: -100px;
     left: -100px;
     animation-delay: -10s;
@@ -192,9 +192,9 @@ body::after {
     width: 100%;
     padding: 16px 20px;
     font-size: 1rem;
-    border: none;
+    border: 1px solid var(--glass-border);
     border-radius: var(--radius-md);
-    background: rgba(0, 0, 0, 0.04);
+    background: rgba(15, 25, 45, 0.6);
     color: var(--text-primary);
     font-family: inherit;
     transition: all var(--transition-fast);
@@ -202,8 +202,9 @@ body::after {
 
 .location-input:focus {
     outline: none;
-    background: rgba(0, 0, 0, 0.06);
+    background: rgba(20, 35, 60, 0.8);
     box-shadow: 0 0 0 4px var(--accent-primary-light);
+    border-color: var(--accent-primary);
 }
 
 .location-input::placeholder {
@@ -225,6 +226,47 @@ body::after {
 
 .location-status.error {
     color: var(--accent-danger);
+}
+
+/* Departure Time Section */
+.departure-time-section {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid rgba(59, 130, 246, 0.15);
+}
+
+.departure-time-container {
+    margin-top: 12px;
+    animation: slideDown 0.2s ease-out;
+}
+
+.datetime-input {
+    width: 100%;
+    padding: 14px 16px;
+    font-size: 1rem;
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-md);
+    background: rgba(15, 25, 45, 0.6);
+    color: var(--text-primary);
+    font-family: inherit;
+    transition: all var(--transition-fast);
+    color-scheme: dark;
+}
+
+.datetime-input:focus {
+    outline: none;
+    background: rgba(20, 35, 60, 0.8);
+    box-shadow: 0 0 0 4px var(--accent-primary-light);
+    border-color: var(--accent-primary);
+}
+
+.traffic-note {
+    margin-top: 10px;
+    font-size: 0.8rem;
+    color: var(--accent-primary);
+    display: flex;
+    align-items: center;
+    gap: 6px;
 }
 
 /* Suggestions Dropdown */
@@ -293,16 +335,18 @@ body::after {
     display: flex;
     align-items: center;
     gap: 12px;
-    background: rgba(0, 0, 0, 0.03);
+    background: rgba(15, 25, 45, 0.4);
     padding: 12px 16px;
     border-radius: var(--radius-md);
     position: relative;
     transition: all var(--transition-fast);
     touch-action: pan-y;
+    border: 1px solid rgba(59, 130, 246, 0.15);
 }
 
 .destination-item:hover {
-    background: rgba(0, 0, 0, 0.05);
+    background: rgba(20, 35, 55, 0.6);
+    border-color: rgba(59, 130, 246, 0.3);
 }
 
 .destination-item.dragging {
@@ -368,9 +412,9 @@ body::after {
     width: 100%;
     padding: 12px 16px;
     font-size: 0.95rem;
-    border: none;
+    border: 1px solid rgba(59, 130, 246, 0.2);
     border-radius: var(--radius-sm);
-    background: rgba(255, 255, 255, 0.7);
+    background: rgba(15, 25, 45, 0.6);
     color: var(--text-primary);
     font-family: inherit;
     transition: all var(--transition-fast);
@@ -378,8 +422,9 @@ body::after {
 
 .destination-input:focus {
     outline: none;
-    background: rgba(255, 255, 255, 0.9);
+    background: rgba(20, 35, 60, 0.8);
     box-shadow: 0 0 0 4px var(--accent-primary-light);
+    border-color: var(--accent-primary);
 }
 
 .drag-handle {
@@ -426,7 +471,7 @@ body::after {
 .return-option {
     padding-top: 16px;
     margin-top: 8px;
-    border-top: 1px solid rgba(0, 0, 0, 0.06);
+    border-top: 1px solid rgba(59, 130, 246, 0.15);
 }
 
 .checkbox-wrapper {
@@ -444,13 +489,13 @@ body::after {
 .checkmark {
     width: 26px;
     height: 26px;
-    border: 2px solid rgba(0, 0, 0, 0.15);
+    border: 2px solid rgba(59, 130, 246, 0.3);
     border-radius: 8px;
     display: flex;
     align-items: center;
     justify-content: center;
     transition: all var(--transition-fast);
-    background: rgba(255, 255, 255, 0.5);
+    background: rgba(15, 25, 45, 0.5);
 }
 
 .checkbox-wrapper:hover .checkmark {
@@ -460,7 +505,7 @@ body::after {
 .checkbox-wrapper input[type="checkbox"]:checked + .checkmark {
     background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
     border-color: transparent;
-    box-shadow: 0 2px 8px rgba(0, 122, 255, 0.3);
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.4);
 }
 
 .checkbox-wrapper input[type="checkbox"]:checked + .checkmark::after {
@@ -537,12 +582,13 @@ body::after {
 }
 
 .btn-secondary {
-    background: rgba(0, 0, 0, 0.06);
+    background: rgba(59, 130, 246, 0.15);
     color: var(--text-primary);
+    border: 1px solid rgba(59, 130, 246, 0.3);
 }
 
 .btn-secondary:hover:not(:disabled) {
-    background: rgba(0, 0, 0, 0.1);
+    background: rgba(59, 130, 246, 0.25);
 }
 
 .btn-success {
@@ -595,15 +641,16 @@ body::after {
 }
 
 .result-card {
-    background: rgba(0, 0, 0, 0.03);
+    background: rgba(15, 25, 45, 0.5);
     padding: 20px 16px;
     border-radius: var(--radius-md);
     text-align: center;
     transition: all var(--transition-fast);
+    border: 1px solid rgba(59, 130, 246, 0.15);
 }
 
 .result-card:hover {
-    background: rgba(0, 0, 0, 0.05);
+    background: rgba(20, 35, 55, 0.6);
     transform: translateY(-2px);
 }
 
@@ -663,14 +710,15 @@ body::after {
 .order-list li {
     padding: 14px 16px;
     margin-bottom: 8px;
-    background: rgba(0, 0, 0, 0.03);
+    background: rgba(15, 25, 45, 0.4);
     border-radius: var(--radius-sm);
     font-size: 0.95rem;
     transition: all var(--transition-fast);
+    border: 1px solid rgba(59, 130, 246, 0.1);
 }
 
 .order-list li:hover {
-    background: rgba(0, 0, 0, 0.05);
+    background: rgba(20, 35, 55, 0.5);
 }
 
 .order-list li:last-child {
@@ -678,9 +726,10 @@ body::after {
 }
 
 .order-list li.locked {
-    background: rgba(255, 149, 0, 0.1);
-    color: #CC7700;
+    background: rgba(245, 158, 11, 0.15);
+    color: #FCD34D;
     font-weight: 600;
+    border-color: rgba(245, 158, 11, 0.3);
 }
 
 .order-list li.locked::after {
@@ -831,79 +880,6 @@ body::after {
     }
 }
 
-/* Dark mode support */
-@media (prefers-color-scheme: dark) {
-    :root {
-        --glass-bg: rgba(30, 30, 30, 0.6);
-        --glass-bg-solid: rgba(40, 40, 40, 0.9);
-        --glass-border: rgba(255, 255, 255, 0.1);
-        --text-primary: rgba(255, 255, 255, 0.95);
-        --text-secondary: rgba(255, 255, 255, 0.65);
-        --text-tertiary: rgba(255, 255, 255, 0.4);
-        --bg-gradient-start: #1a1a2e;
-        --bg-gradient-mid: #16213e;
-        --bg-gradient-end: #0f3460;
-    }
-    
-    body {
-        background: linear-gradient(135deg, var(--bg-gradient-start) 0%, var(--bg-gradient-mid) 50%, var(--bg-gradient-end) 100%);
-    }
-    
-    .location-input,
-    .destination-input {
-        background: rgba(255, 255, 255, 0.08);
-        color: var(--text-primary);
-    }
-    
-    .location-input:focus,
-    .destination-input:focus {
-        background: rgba(255, 255, 255, 0.12);
-    }
-    
-    .destination-item {
-        background: rgba(255, 255, 255, 0.05);
-    }
-    
-    .destination-item:hover {
-        background: rgba(255, 255, 255, 0.08);
-    }
-    
-    .result-card {
-        background: rgba(255, 255, 255, 0.05);
-    }
-    
-    .result-card:hover {
-        background: rgba(255, 255, 255, 0.08);
-    }
-    
-    .order-list li {
-        background: rgba(255, 255, 255, 0.05);
-    }
-    
-    .order-list li:hover {
-        background: rgba(255, 255, 255, 0.08);
-    }
-    
-    .order-list li.locked {
-        background: rgba(255, 149, 0, 0.15);
-        color: #FFB340;
-    }
-    
-    .checkmark {
-        background: rgba(255, 255, 255, 0.1);
-        border-color: rgba(255, 255, 255, 0.2);
-    }
-    
-    .btn-secondary {
-        background: rgba(255, 255, 255, 0.1);
-        color: var(--text-primary);
-    }
-    
-    .btn-secondary:hover:not(:disabled) {
-        background: rgba(255, 255, 255, 0.15);
-    }
-}
-
 /* Accessibility - Reduced Motion */
 @media (prefers-reduced-motion: reduce) {
     body::before,
@@ -923,7 +899,7 @@ body::after {
     }
 }
 
-/* Custom scrollbar */
+/* Custom scrollbar - Dark theme */
 ::-webkit-scrollbar {
     width: 6px;
     height: 6px;
@@ -934,20 +910,10 @@ body::after {
 }
 
 ::-webkit-scrollbar-thumb {
-    background: rgba(0, 0, 0, 0.2);
+    background: rgba(59, 130, 246, 0.3);
     border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-    background: rgba(0, 0, 0, 0.3);
-}
-
-@media (prefers-color-scheme: dark) {
-    ::-webkit-scrollbar-thumb {
-        background: rgba(255, 255, 255, 0.2);
-    }
-    
-    ::-webkit-scrollbar-thumb:hover {
-        background: rgba(255, 255, 255, 0.3);
-    }
+    background: rgba(59, 130, 246, 0.5);
 }

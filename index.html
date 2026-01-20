@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="theme-color" content="#667eea">
+    <meta name="theme-color" content="#0a0f1a">
     <meta name="description" content="Route Optimizer - Plan your multi-stop trips efficiently with real-time optimization">
     
     <title>Route Optimizer</title>
@@ -52,6 +52,21 @@
                     <div id="startSuggestions" class="suggestions-dropdown"></div>
                 </div>
                 <div id="startLocationStatus" class="location-status"></div>
+                
+                <!-- Departure Time Option -->
+                <div class="departure-time-section">
+                    <label class="checkbox-wrapper">
+                        <input type="checkbox" id="useDepartureTime">
+                        <span class="checkmark"></span>
+                        <span class="label-text">🕐 Set departure time</span>
+                    </label>
+                    <div id="departureTimeContainer" class="departure-time-container" style="display: none;">
+                        <input type="datetime-local" 
+                               id="departureTime" 
+                               class="datetime-input">
+                        <p class="traffic-note">⚡ Times shown are estimates. Open in Google Maps for real-time traffic.</p>
+                    </div>
+                </div>
             </section>
 
             <!-- Destinations Section -->

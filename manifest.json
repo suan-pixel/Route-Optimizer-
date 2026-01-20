@@ -4,8 +4,8 @@
     "description": "Plan your multi-stop trips efficiently",
     "start_url": "./",
     "display": "standalone",
-    "background_color": "#667eea",
-    "theme_color": "#667eea",
+    "background_color": "#0a0f1a",
+    "theme_color": "#0a0f1a",
     "orientation": "portrait",
     "scope": "./",
     "icons": [
