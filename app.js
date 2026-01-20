@@ -172,7 +172,7 @@ async function geocode(query) {
 
 async function searchLocation(query, nearLat = null, nearLng = null) {
     try {
-        let url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5`;
+        let url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=10`;
         
         // If we have a reference point, use bounded search to prefer nearby results
         if (nearLat && nearLng) {
@@ -184,11 +184,95 @@ async function searchLocation(query, nearLat = null, nearLng = null) {
         if (!response.ok) {
             throw new Error('Location search request failed');
         }
-        return await response.json();
+        const results = await response.json();
+        
+        // If we have a reference point, sort results by straight-line distance first
+        // (will be refined with driving time later)
+        if (nearLat && nearLng && results.length > 0) {
+            results.forEach(result => {
+                result.straightLineDistance = calculateDistance(
+                    nearLat, nearLng,
+                    parseFloat(result.lat), parseFloat(result.lon)
+                );
+            });
+            results.sort((a, b) => a.straightLineDistance - b.straightLineDistance);
+        }
+        
+        return results;
     } catch (error) {
         console.error('Location search error:', error);
         return [];
     }
+}
+
+// Estimate driving time to a location from a reference point
+async function estimateDrivingTime(fromLat, fromLng, toLat, toLng) {
+    try {
+        const coords = `${fromLng},${fromLat};${toLng},${toLat}`;
+        const response = await fetch(
+            `https://router.project-osrm.org/route/v1/driving/${coords}?overview=false`
+        );
+        
+        if (!response.ok) {
+            return null;
+        }
+        
+        const data = await response.json();
+        if (data.code === 'Ok' && data.routes && data.routes.length > 0) {
+            return {
+                duration: data.routes[0].duration, // seconds
+                distance: data.routes[0].distance  // meters
+            };
+        }
+        return null;
+    } catch (error) {
+        console.error('Driving time estimation error:', error);
+        return null;
+    }
+}
+
+// Search for locations with driving time estimates
+async function searchLocationWithTimes(query, nearLat, nearLng) {
+    const results = await searchLocation(query, nearLat, nearLng);
+    
+    if (!nearLat || !nearLng || results.length === 0) {
+        return results;
+    }
+    
+    // Get driving times for top results (limit to 3 to avoid overwhelming the API)
+    const topResults = results.slice(0, 3);
+    
+    // Process sequentially with a small delay to avoid rate limiting
+    const resultsWithTimes = [];
+    for (let i = 0; i < topResults.length; i++) {
+        const result = topResults[i];
+        const timeInfo = await estimateDrivingTime(
+            nearLat, nearLng,
+            parseFloat(result.lat), parseFloat(result.lon)
+        );
+        resultsWithTimes.push({
+            ...result,
+            drivingTime: timeInfo ? timeInfo.duration : null,
+            drivingDistance: timeInfo ? timeInfo.distance : null
+        });
+        
+        // Add small delay between requests to be respectful to the API
+        if (i < topResults.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+        }
+    }
+    
+    // Sort by driving time (fallback to straight-line distance if time unavailable)
+    resultsWithTimes.sort((a, b) => {
+        if (a.drivingTime !== null && b.drivingTime !== null) {
+            return a.drivingTime - b.drivingTime;
+        }
+        if (a.drivingTime !== null) return -1;
+        if (b.drivingTime !== null) return 1;
+        return (a.straightLineDistance || 0) - (b.straightLineDistance || 0);
+    });
+    
+    return resultsWithTimes;
 }
 
 // ===================================
@@ -197,7 +281,7 @@ async function searchLocation(query, nearLat = null, nearLng = null) {
 
 let autocompleteTimeout = null;
 
-function setupAutocomplete(inputElement, suggestionsElement, onSelect) {
+function setupAutocomplete(inputElement, suggestionsElement, onSelect, useTimesEstimate = false) {
     inputElement.addEventListener('input', (e) => {
         const query = e.target.value.trim();
         
@@ -214,7 +298,18 @@ function setupAutocomplete(inputElement, suggestionsElement, onSelect) {
         // Debounce API calls
         autocompleteTimeout = setTimeout(async () => {
             try {
-                const results = await geocode(query);
+                let results;
+                // For destination inputs, use time-based search if we have a start location
+                if (useTimesEstimate && state.startLocation) {
+                    results = await searchLocationWithTimes(
+                        query,
+                        state.startLocation.lat,
+                        state.startLocation.lng
+                    );
+                } else {
+                    results = await geocode(query);
+                }
+                
                 showSuggestions(suggestionsElement, results, (result) => {
                     inputElement.value = result.display_name;
                     onSelect({
@@ -223,7 +318,7 @@ function setupAutocomplete(inputElement, suggestionsElement, onSelect) {
                         lng: parseFloat(result.lon)
                     });
                     hideSuggestions(suggestionsElement);
-                });
+                }, useTimesEstimate);
             } catch (error) {
                 console.error('Autocomplete error:', error);
             }
@@ -238,7 +333,7 @@ function setupAutocomplete(inputElement, suggestionsElement, onSelect) {
     });
 }
 
-function showSuggestions(container, results, onSelect) {
+function showSuggestions(container, results, onSelect, showTimes = false) {
     container.innerHTML = '';
     
     if (results.length === 0) {
@@ -250,7 +345,28 @@ function showSuggestions(container, results, onSelect) {
     results.forEach(result => {
         const item = document.createElement('div');
         item.className = 'suggestion-item';
-        item.textContent = result.display_name;
+        
+        // Create suggestion content with optional time badge
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'suggestion-name';
+        nameSpan.textContent = result.display_name;
+        item.appendChild(nameSpan);
+        
+        // Add driving time badge if available
+        if (showTimes && result.drivingTime !== null && result.drivingTime !== undefined) {
+            const timeBadge = document.createElement('span');
+            timeBadge.className = 'suggestion-time-badge';
+            const minutes = Math.round(result.drivingTime / 60);
+            if (minutes < 60) {
+                timeBadge.textContent = `+${minutes} min`;
+            } else {
+                const hours = Math.floor(minutes / 60);
+                const mins = minutes % 60;
+                timeBadge.textContent = `+${hours}h ${mins}m`;
+            }
+            item.appendChild(timeBadge);
+        }
+        
         item.addEventListener('click', () => onSelect(result));
         container.appendChild(item);
     });
@@ -363,7 +479,7 @@ function createDestinationElement(destination, number) {
         destination.address = location.address;
         destination.location = location;
         updateOptimizeButton();
-    });
+    }, true); // Enable time-based search for destinations
     
     // Update address on blur if no autocomplete selection
     input.addEventListener('blur', () => {
@@ -554,21 +670,24 @@ async function optimizeRoute() {
         }
         
         // Geocode destinations that don't have coordinates
-        showToast('Finding locations...', 'success');
+        showToast('Finding nearest locations...', 'success');
         
         for (const dest of validDestinations) {
             if (!dest.location) {
-                const results = await searchLocation(
+                // Use the improved search that finds nearest locations by driving time
+                const results = await searchLocationWithTimes(
                     dest.address,
                     state.startLocation.lat,
                     state.startLocation.lng
                 );
                 
                 if (results.length > 0) {
+                    // Results are already sorted by driving time (nearest first)
+                    const nearest = results[0];
                     dest.location = {
-                        address: results[0].display_name,
-                        lat: parseFloat(results[0].lat),
-                        lng: parseFloat(results[0].lon)
+                        address: nearest.display_name,
+                        lat: parseFloat(nearest.lat),
+                        lng: parseFloat(nearest.lon)
                     };
                 } else {
                     throw new Error(`Could not find location: ${dest.address}`);
@@ -724,34 +843,80 @@ function toRad(deg) {
 // Route Calculation (OSRM)
 // ===================================
 
-async function calculateRoute(waypoints) {
-    try {
-        // Use OSRM for routing
-        const coords = waypoints.map(wp => `${wp.lng},${wp.lat}`).join(';');
-        
-        const response = await fetch(
-            `https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`
-        );
-        
-        if (!response.ok) {
-            throw new Error('Route calculation request failed');
+async function calculateRoute(waypoints, retries = 2) {
+    const coords = waypoints.map(wp => `${wp.lng},${wp.lat}`).join(';');
+    
+    for (let attempt = 0; attempt <= retries; attempt++) {
+        try {
+            // Use OSRM for routing
+            const response = await fetch(
+                `https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`,
+                {
+                    signal: AbortSignal.timeout(15000) // 15 second timeout
+                }
+            );
+            
+            if (!response.ok) {
+                if (response.status === 429) {
+                    // Rate limited - wait and retry
+                    if (attempt < retries) {
+                        await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+                        continue;
+                    }
+                    throw new Error('Route service is busy. Please try again in a moment.');
+                }
+                throw new Error(`Route calculation failed (HTTP ${response.status})`);
+            }
+            
+            const data = await response.json();
+            
+            if (data.code === 'NoRoute') {
+                throw new Error('No driving route found between these locations. Please check if the locations are accessible by road.');
+            }
+            
+            if (data.code === 'InvalidInput') {
+                throw new Error('Invalid location coordinates. Please re-enter the addresses.');
+            }
+            
+            if (data.code !== 'Ok' || !data.routes || data.routes.length === 0) {
+                throw new Error('Could not calculate route. The routing service returned an unexpected response.');
+            }
+            
+            return {
+                duration: data.routes[0].duration, // seconds
+                distance: data.routes[0].distance, // meters
+                geometry: data.routes[0].geometry
+            };
+        } catch (error) {
+            console.error(`Route calculation error (attempt ${attempt + 1}):`, error);
+            
+            // Handle timeout/network errors
+            if (error.name === 'TimeoutError' || error.name === 'AbortError') {
+                if (attempt < retries) {
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    continue;
+                }
+                throw new Error('Route calculation timed out. Please check your internet connection and try again.');
+            }
+            
+            // Handle fetch errors (no internet)
+            if (error.name === 'TypeError' && error.message.includes('fetch')) {
+                throw new Error('Network error. Please check your internet connection and try again.');
+            }
+            
+            // Re-throw specific errors
+            if (error.message && !error.message.includes('Route calculation')) {
+                throw error;
+            }
+            
+            // Last attempt failed
+            if (attempt >= retries) {
+                throw new Error('Could not calculate route. Please check your internet connection and try again.');
+            }
         }
-        
-        const data = await response.json();
-        
-        if (data.code !== 'Ok' || !data.routes || data.routes.length === 0) {
-            throw new Error('Could not calculate route');
-        }
-        
-        return {
-            duration: data.routes[0].duration, // seconds
-            distance: data.routes[0].distance, // meters
-            geometry: data.routes[0].geometry
-        };
-    } catch (error) {
-        console.error('Route calculation error:', error);
-        throw new Error('Could not calculate route. Please check your internet connection.');
     }
+    
+    throw new Error('Could not calculate route after multiple attempts. Please try again later.');
 }
 
 // ===================================
