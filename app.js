@@ -239,11 +239,10 @@ async function estimateDrivingTime(fromLat, fromLng, toLat, toLng) {
         }
     }
     
-    // Fallback: estimate using straight-line distance
+    // Fallback: estimate using straight-line distance and average speed
     const straightLineKm = calculateDistance(fromLat, fromLng, toLat, toLng);
-    // Assume average speed of 40 km/h for urban driving
     return {
-        duration: (straightLineKm / 40) * 3600, // seconds
+        duration: (straightLineKm / FALLBACK_AVERAGE_SPEED_KMH) * 3600, // seconds
         distance: straightLineKm * 1000, // meters
         isEstimate: true
     };
@@ -862,10 +861,14 @@ function toRad(deg) {
 // ===================================
 
 // List of OSRM routing servers to try (primary and fallbacks)
+// These are well-established public OSRM instances
 const ROUTING_SERVERS = [
     'https://router.project-osrm.org',
     'https://routing.openstreetmap.de/routed-car'
 ];
+
+// Fallback speed assumptions for route estimation when routing services are unavailable
+const FALLBACK_AVERAGE_SPEED_KMH = 45; // Average urban/suburban driving speed in km/h
 
 // Check if the browser is online
 function isOnline() {
@@ -1053,8 +1056,8 @@ function calculateFallbackRoute(waypoints) {
         }
     }
     
-    // Estimate duration: assume average speed of 50 km/h (city driving)
-    const estimatedDuration = (totalDistance / 1000) / 50 * 3600; // seconds
+    // Estimate duration using fallback average speed
+    const estimatedDuration = (totalDistance / 1000) / FALLBACK_AVERAGE_SPEED_KMH * 3600; // seconds
     
     return {
         duration: estimatedDuration,
