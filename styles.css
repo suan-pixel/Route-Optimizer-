@@ -311,6 +311,29 @@ body::after {
     transition: background var(--transition-fast);
     font-size: 0.95rem;
     color: var(--text-primary);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+}
+
+.suggestion-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.suggestion-time-badge {
+    flex-shrink: 0;
+    background: linear-gradient(135deg, var(--accent-success), #30D158);
+    color: white;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    white-space: nowrap;
+    box-shadow: 0 2px 8px rgba(52, 199, 89, 0.3);
 }
 
 .suggestion-item:last-child {
