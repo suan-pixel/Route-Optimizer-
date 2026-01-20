@@ -75,26 +75,26 @@ body::after {
     content: '';
     position: fixed;
     border-radius: 50%;
-    filter: blur(80px);
-    opacity: 0.5;
+    filter: blur(40px);
+    opacity: 0.4;
     z-index: -1;
     animation: float 20s ease-in-out infinite;
 }
 
 body::before {
-    width: 600px;
-    height: 600px;
+    width: 400px;
+    height: 400px;
     background: radial-gradient(circle, rgba(255, 255, 255, 0.3) 0%, transparent 70%);
-    top: -200px;
-    right: -200px;
+    top: -150px;
+    right: -150px;
 }
 
 body::after {
-    width: 500px;
-    height: 500px;
+    width: 350px;
+    height: 350px;
     background: radial-gradient(circle, rgba(255, 255, 255, 0.2) 0%, transparent 70%);
-    bottom: -150px;
-    left: -150px;
+    bottom: -100px;
+    left: -100px;
     animation-delay: -10s;
 }
 
@@ -906,17 +906,20 @@ body::after {
 
 /* Accessibility - Reduced Motion */
 @media (prefers-reduced-motion: reduce) {
-    *,
-    *::before,
-    *::after {
-        animation-duration: 0.01ms !important;
-        animation-iteration-count: 1 !important;
-        transition-duration: 0.01ms !important;
-    }
-    
     body::before,
     body::after {
         animation: none;
+    }
+    
+    .btn,
+    .destination-item,
+    .destination-number,
+    .result-card,
+    .toast,
+    .suggestions-dropdown,
+    .spinner {
+        animation: none;
+        transition: none;
     }
 }
 
