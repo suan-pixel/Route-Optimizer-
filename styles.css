@@ -829,6 +829,12 @@ body::after {
     border: none;
 }
 
+.toast.warning {
+    background: linear-gradient(135deg, var(--accent-warning), #FFB800);
+    color: white;
+    border: none;
+}
+
 /* Empty State */
 .empty-state {
     text-align: center;
