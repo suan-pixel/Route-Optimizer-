@@ -5,20 +5,13 @@
 
 const CACHE_NAME = 'route-optimizer-v1';
 const STATIC_ASSETS = [
-    '/Route-Optimizer-/',
-    '/Route-Optimizer-/index.html',
-    '/Route-Optimizer-/styles.css',
-    '/Route-Optimizer-/app.js',
-    '/Route-Optimizer-/manifest.json',
-    '/Route-Optimizer-/icons/icon-192.png',
-    '/Route-Optimizer-/icons/icon-512.png'
-];
-
-// External resources to cache
-const EXTERNAL_ASSETS = [
-    'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
-    'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
-    'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap'
+    './',
+    './index.html',
+    './styles.css',
+    './app.js',
+    './manifest.json',
+    './icons/icon-192.png',
+    './icons/icon-512.png'
 ];
 
 // Install event - cache static assets
@@ -27,8 +20,7 @@ self.addEventListener('install', (event) => {
         caches.open(CACHE_NAME)
             .then((cache) => {
                 console.log('Caching static assets');
-                // Cache local assets
-                return cache.addAll(STATIC_ASSETS.filter(url => !url.startsWith('http')))
+                return cache.addAll(STATIC_ASSETS)
                     .catch(err => console.log('Some assets failed to cache:', err));
             })
             .then(() => self.skipWaiting())
@@ -116,26 +108,8 @@ self.addEventListener('fetch', (event) => {
             .catch(() => {
                 // Return offline page for navigation requests
                 if (request.mode === 'navigate') {
-                    return caches.match('/Route-Optimizer-/index.html');
+                    return caches.match('./index.html');
                 }
             })
     );
-});
-
-// Background sync for offline actions (future enhancement)
-self.addEventListener('sync', (event) => {
-    if (event.tag === 'route-sync') {
-        console.log('Background sync triggered');
-    }
-});
-
-// Push notifications (future enhancement)
-self.addEventListener('push', (event) => {
-    if (event.data) {
-        const data = event.data.json();
-        self.registration.showNotification(data.title, {
-            body: data.body,
-            icon: '/Route-Optimizer-/icons/icon-192.png'
-        });
-    }
 });

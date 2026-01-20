@@ -540,6 +540,18 @@ body {
     overflow: hidden;
 }
 
+/* Map Loading Message */
+.map-loading-message {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--text-secondary);
+    text-align: center;
+    padding: 20px;
+    background: var(--bg-tertiary);
+}
+
 /* Footer */
 .footer {
     text-align: center;

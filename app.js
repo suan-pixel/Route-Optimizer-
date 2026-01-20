@@ -129,31 +129,55 @@ function detectUserLocation() {
 // ===================================
 
 async function reverseGeocode(lat, lng) {
-    const response = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`
-    );
-    const data = await response.json();
-    return data.display_name || `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+    try {
+        const response = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`
+        );
+        if (!response.ok) {
+            throw new Error('Geocoding request failed');
+        }
+        const data = await response.json();
+        return data.display_name || `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+    } catch (error) {
+        console.error('Reverse geocoding error:', error);
+        return `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+    }
 }
 
 async function geocode(query) {
-    const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5`
-    );
-    return await response.json();
+    try {
+        const response = await fetch(
+            `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5`
+        );
+        if (!response.ok) {
+            throw new Error('Geocoding request failed');
+        }
+        return await response.json();
+    } catch (error) {
+        console.error('Geocoding error:', error);
+        return [];
+    }
 }
 
 async function searchLocation(query, nearLat = null, nearLng = null) {
-    let url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5`;
-    
-    // If we have a reference point, use bounded search to prefer nearby results
-    if (nearLat && nearLng) {
-        const viewbox = `${nearLng - 0.5},${nearLat - 0.5},${nearLng + 0.5},${nearLat + 0.5}`;
-        url += `&viewbox=${viewbox}&bounded=0`;
+    try {
+        let url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5`;
+        
+        // If we have a reference point, use bounded search to prefer nearby results
+        if (nearLat && nearLng) {
+            const viewbox = `${nearLng - 0.5},${nearLat - 0.5},${nearLng + 0.5},${nearLat + 0.5}`;
+            url += `&viewbox=${viewbox}&bounded=0`;
+        }
+        
+        const response = await fetch(url);
+        if (!response.ok) {
+            throw new Error('Location search request failed');
+        }
+        return await response.json();
+    } catch (error) {
+        console.error('Location search error:', error);
+        return [];
     }
-    
-    const response = await fetch(url);
-    return await response.json();
 }
 
 // ===================================
@@ -669,24 +693,33 @@ function toRad(deg) {
 // ===================================
 
 async function calculateRoute(waypoints) {
-    // Use OSRM for routing
-    const coords = waypoints.map(wp => `${wp.lng},${wp.lat}`).join(';');
-    
-    const response = await fetch(
-        `https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`
-    );
-    
-    const data = await response.json();
-    
-    if (data.code !== 'Ok' || !data.routes || data.routes.length === 0) {
-        throw new Error('Could not calculate route');
+    try {
+        // Use OSRM for routing
+        const coords = waypoints.map(wp => `${wp.lng},${wp.lat}`).join(';');
+        
+        const response = await fetch(
+            `https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`
+        );
+        
+        if (!response.ok) {
+            throw new Error('Route calculation request failed');
+        }
+        
+        const data = await response.json();
+        
+        if (data.code !== 'Ok' || !data.routes || data.routes.length === 0) {
+            throw new Error('Could not calculate route');
+        }
+        
+        return {
+            duration: data.routes[0].duration, // seconds
+            distance: data.routes[0].distance, // meters
+            geometry: data.routes[0].geometry
+        };
+    } catch (error) {
+        console.error('Route calculation error:', error);
+        throw new Error('Could not calculate route. Please check your internet connection.');
     }
-    
-    return {
-        duration: data.routes[0].duration, // seconds
-        distance: data.routes[0].distance, // meters
-        geometry: data.routes[0].geometry
-    };
 }
 
 // ===================================
@@ -774,7 +807,7 @@ function displayMap(destinations, geometry) {
     // Check if Leaflet is loaded
     if (typeof L === 'undefined') {
         console.warn('Leaflet library not loaded. Map display skipped.');
-        document.getElementById('map').innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#666;text-align:center;padding:20px;">📍 Map loading... If this persists, please check your internet connection.</div>';
+        document.getElementById('map').innerHTML = '<div class="map-loading-message">📍 Map loading... If this persists, please check your internet connection.</div>';
         return;
     }
     

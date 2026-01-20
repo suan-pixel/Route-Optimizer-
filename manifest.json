@@ -2,12 +2,12 @@
     "name": "Route Optimizer",
     "short_name": "Route Opt",
     "description": "Plan your multi-stop trips efficiently",
-    "start_url": "/Route-Optimizer-/",
+    "start_url": "./",
     "display": "standalone",
     "background_color": "#667eea",
     "theme_color": "#4A90D9",
     "orientation": "portrait",
-    "scope": "/Route-Optimizer-/",
+    "scope": "./",
     "icons": [
         {
             "src": "icons/icon-72.png",
