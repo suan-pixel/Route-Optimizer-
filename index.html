@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#4A90D9">
+    <meta name="description" content="Route Optimizer - Plan your multi-stop trips efficiently">
+    
+    <title>Route Optimizer</title>
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="manifest.json">
+    
+    <!-- Icons -->
+    <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" 
+          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" 
+          crossorigin="">
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Main Styles -->
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <h1>🗺️ Route Optimizer</h1>
+            <p class="subtitle">Plan your multi-stop trips efficiently</p>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Start Location Section -->
+            <section class="location-section">
+                <div class="section-header">
+                    <h2>📍 Start Location</h2>
+                    <button id="detectLocationBtn" class="btn btn-small btn-secondary" title="Use my location">
+                        <span class="icon">📍</span> Auto-detect
+                    </button>
+                </div>
+                <div class="input-wrapper">
+                    <input type="text" 
+                           id="startLocation" 
+                           class="location-input" 
+                           placeholder="Enter start address or use auto-detect..."
+                           autocomplete="off">
+                    <div id="startSuggestions" class="suggestions-dropdown"></div>
+                </div>
+                <div id="startLocationStatus" class="location-status"></div>
+            </section>
+
+            <!-- Destinations Section -->
+            <section class="destinations-section">
+                <div class="section-header">
+                    <h2>🎯 Destinations</h2>
+                    <button id="addDestinationBtn" class="btn btn-small btn-primary" title="Add destination">
+                        <span class="icon">+</span> Add
+                    </button>
+                </div>
+                
+                <div id="destinationsList" class="destinations-list">
+                    <!-- Destinations will be added here dynamically -->
+                </div>
+
+                <!-- Return to Start Option -->
+                <div class="return-option">
+                    <label class="checkbox-wrapper">
+                        <input type="checkbox" id="returnToStart" checked>
+                        <span class="checkmark"></span>
+                        <span class="label-text">🔄 Return to start location</span>
+                    </label>
+                </div>
+            </section>
+
+            <!-- Optimize Button -->
+            <section class="optimize-section">
+                <button id="optimizeBtn" class="btn btn-large btn-primary" disabled>
+                    <span class="btn-text">🚗 Optimize Route</span>
+                    <span class="btn-loading" style="display: none;">
+                        <span class="spinner"></span> Calculating...
+                    </span>
+                </button>
+            </section>
+
+            <!-- Results Section -->
+            <section id="resultsSection" class="results-section" style="display: none;">
+                <h2>📊 Route Results</h2>
+                
+                <div class="results-grid">
+                    <div class="result-card">
+                        <div class="result-icon">⏱️</div>
+                        <div class="result-label">Optimized Time</div>
+                        <div id="optimizedTime" class="result-value">--</div>
+                    </div>
+                    <div class="result-card result-card-highlight">
+                        <div class="result-icon">🎉</div>
+                        <div class="result-label">Time Saved</div>
+                        <div id="timeSaved" class="result-value">--</div>
+                    </div>
+                    <div class="result-card">
+                        <div class="result-icon">📏</div>
+                        <div class="result-label">Total Distance</div>
+                        <div id="totalDistance" class="result-value">--</div>
+                    </div>
+                </div>
+
+                <!-- Optimized Order -->
+                <div class="optimized-order">
+                    <h3>📋 Optimized Order</h3>
+                    <ol id="optimizedOrderList" class="order-list">
+                        <!-- Optimized order will be shown here -->
+                    </ol>
+                </div>
+
+                <!-- Map -->
+                <div id="map" class="map-container"></div>
+
+                <!-- Export Button -->
+                <button id="openInMapsBtn" class="btn btn-large btn-success">
+                    <span class="icon">🗺️</span> Open in Google Maps
+                </button>
+            </section>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>Made with ❤️ for efficient travel</p>
+        </footer>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast"></div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+            crossorigin=""></script>
+    
+    <!-- Main App Script -->
+    <script src="app.js"></script>
+    
+    <!-- Register Service Worker -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js')
+                    .then(reg => console.log('Service Worker registered'))
+                    .catch(err => console.log('Service Worker registration failed:', err));
+            });
+        }
+    </script>
+</body>
+</html>
