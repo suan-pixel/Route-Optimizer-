@@ -785,11 +785,12 @@ function formatDuration(seconds) {
 }
 
 function formatDistance(meters) {
-    const km = meters / 1000;
-    if (km < 1) {
-        return `${Math.round(meters)} m`;
+    const miles = meters / 1609.344;
+    if (miles < 0.1) {
+        const feet = meters * 3.28084;
+        return `${Math.round(feet)} ft`;
     }
-    return `${km.toFixed(1)} km`;
+    return `${miles.toFixed(1)} mi`;
 }
 
 function truncateAddress(address) {
