@@ -239,22 +239,28 @@ async function searchLocationWithTimes(query, nearLat, nearLng) {
         return results;
     }
     
-    // Get driving times for top results (limit to 5 to avoid too many API calls)
-    const topResults = results.slice(0, 5);
+    // Get driving times for top results (limit to 3 to avoid overwhelming the API)
+    const topResults = results.slice(0, 3);
     
-    const resultsWithTimes = await Promise.all(
-        topResults.map(async (result) => {
-            const timeInfo = await estimateDrivingTime(
-                nearLat, nearLng,
-                parseFloat(result.lat), parseFloat(result.lon)
-            );
-            return {
-                ...result,
-                drivingTime: timeInfo ? timeInfo.duration : null,
-                drivingDistance: timeInfo ? timeInfo.distance : null
-            };
-        })
-    );
+    // Process sequentially with a small delay to avoid rate limiting
+    const resultsWithTimes = [];
+    for (let i = 0; i < topResults.length; i++) {
+        const result = topResults[i];
+        const timeInfo = await estimateDrivingTime(
+            nearLat, nearLng,
+            parseFloat(result.lat), parseFloat(result.lon)
+        );
+        resultsWithTimes.push({
+            ...result,
+            drivingTime: timeInfo ? timeInfo.duration : null,
+            drivingDistance: timeInfo ? timeInfo.distance : null
+        });
+        
+        // Add small delay between requests to be respectful to the API
+        if (i < topResults.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+        }
+    }
     
     // Sort by driving time (fallback to straight-line distance if time unavailable)
     resultsWithTimes.sort((a, b) => {
@@ -683,12 +689,6 @@ async function optimizeRoute() {
                         lat: parseFloat(nearest.lat),
                         lng: parseFloat(nearest.lon)
                     };
-                    
-                    // Show which location was selected if there were multiple options
-                    if (results.length > 1 && nearest.drivingTime) {
-                        const minutes = Math.round(nearest.drivingTime / 60);
-                        console.log(`Selected nearest ${dest.address}: ${minutes} min away`);
-                    }
                 } else {
                     throw new Error(`Could not find location: ${dest.address}`);
                 }
