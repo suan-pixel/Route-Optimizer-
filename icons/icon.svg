@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#667eea"/>
+      <stop offset="100%" style="stop-color:#764ba2"/>
+    </linearGradient>
+  </defs>
+  <rect width="192" height="192" rx="32" fill="url(#bg)"/>
+  <g transform="translate(30, 30) scale(0.7)">
+    <!-- Map/Route icon -->
+    <circle cx="40" cy="50" r="12" fill="#fff"/>
+    <circle cx="40" cy="50" r="6" fill="#667eea"/>
+    <circle cx="120" cy="40" r="12" fill="#fff"/>
+    <circle cx="120" cy="40" r="6" fill="#667eea"/>
+    <circle cx="140" cy="120" r="12" fill="#fff"/>
+    <circle cx="140" cy="120" r="6" fill="#667eea"/>
+    <circle cx="60" cy="140" r="12" fill="#fff"/>
+    <circle cx="60" cy="140" r="6" fill="#667eea"/>
+    <!-- Route lines -->
+    <path d="M52 50 L108 42" stroke="#fff" stroke-width="4" fill="none" stroke-dasharray="8,4"/>
+    <path d="M120 52 L140 108" stroke="#fff" stroke-width="4" fill="none" stroke-dasharray="8,4"/>
+    <path d="M128 120 L72 140" stroke="#fff" stroke-width="4" fill="none" stroke-dasharray="8,4"/>
+    <path d="M48 140 L44 62" stroke="#fff" stroke-width="4" fill="none" stroke-dasharray="8,4"/>
+  </g>
+</svg>
