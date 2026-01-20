@@ -207,28 +207,45 @@ async function searchLocation(query, nearLat = null, nearLng = null) {
 
 // Estimate driving time to a location from a reference point
 async function estimateDrivingTime(fromLat, fromLng, toLat, toLng) {
-    try {
-        const coords = `${fromLng},${fromLat};${toLng},${toLat}`;
-        const response = await fetch(
-            `https://router.project-osrm.org/route/v1/driving/${coords}?overview=false`
-        );
-        
-        if (!response.ok) {
-            return null;
+    const coords = `${fromLng.toFixed(6)},${fromLat.toFixed(6)};${toLng.toFixed(6)},${toLat.toFixed(6)}`;
+    
+    // Try each routing server
+    for (const serverUrl of ROUTING_SERVERS) {
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000);
+            
+            const response = await fetch(
+                `${serverUrl}/route/v1/driving/${coords}?overview=false`,
+                { signal: controller.signal }
+            );
+            
+            clearTimeout(timeoutId);
+            
+            if (!response.ok) {
+                continue; // Try next server
+            }
+            
+            const data = await response.json();
+            if (data.code === 'Ok' && data.routes && data.routes.length > 0) {
+                return {
+                    duration: data.routes[0].duration, // seconds
+                    distance: data.routes[0].distance  // meters
+                };
+            }
+        } catch (error) {
+            console.warn(`Driving time estimation failed for ${serverUrl}:`, error.message);
+            // Continue to next server
         }
-        
-        const data = await response.json();
-        if (data.code === 'Ok' && data.routes && data.routes.length > 0) {
-            return {
-                duration: data.routes[0].duration, // seconds
-                distance: data.routes[0].distance  // meters
-            };
-        }
-        return null;
-    } catch (error) {
-        console.error('Driving time estimation error:', error);
-        return null;
     }
+    
+    // Fallback: estimate using straight-line distance and average speed
+    const straightLineKm = calculateDistance(fromLat, fromLng, toLat, toLng);
+    return {
+        duration: (straightLineKm / FALLBACK_AVERAGE_SPEED_KMH) * 3600, // seconds
+        distance: straightLineKm * 1000, // meters
+        isEstimate: true
+    };
 }
 
 // Search for locations with driving time estimates
@@ -840,83 +857,329 @@ function toRad(deg) {
 }
 
 // ===================================
-// Route Calculation (OSRM)
+// Route Calculation (OSRM with Fallbacks)
 // ===================================
 
-async function calculateRoute(waypoints, retries = 2) {
-    const coords = waypoints.map(wp => `${wp.lng},${wp.lat}`).join(';');
+// List of OSRM routing servers to try (primary and fallbacks)
+// These are well-established public OSRM instances
+const ROUTING_SERVERS = [
+    'https://router.project-osrm.org',
+    'https://routing.openstreetmap.de/routed-car'
+];
+
+// Fallback speed assumptions for route estimation when routing services are unavailable
+const FALLBACK_AVERAGE_SPEED_KMH = 45; // Average urban/suburban driving speed in km/h
+
+// Check if the browser is online
+function isOnline() {
+    return navigator.onLine !== false;
+}
+
+// Test network connectivity by making a lightweight request
+async function testNetworkConnectivity() {
+    try {
+        // Use a lightweight request to test connectivity
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        
+        const response = await fetch('https://nominatim.openstreetmap.org/status.php', {
+            method: 'HEAD',
+            signal: controller.signal,
+            cache: 'no-store'
+        });
+        
+        clearTimeout(timeoutId);
+        return response.ok;
+    } catch (error) {
+        console.warn('Network connectivity test failed:', error.message);
+        return false;
+    }
+}
+
+// Validate waypoints before making routing request
+function validateWaypoints(waypoints) {
+    if (!waypoints || waypoints.length < 2) {
+        return { valid: false, error: 'At least two locations are required for routing.' };
+    }
     
-    for (let attempt = 0; attempt <= retries; attempt++) {
-        try {
-            // Use OSRM for routing
-            const response = await fetch(
-                `https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`,
-                {
-                    signal: AbortSignal.timeout(15000) // 15 second timeout
-                }
-            );
-            
-            if (!response.ok) {
-                if (response.status === 429) {
-                    // Rate limited - wait and retry
-                    if (attempt < retries) {
-                        await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
-                        continue;
-                    }
-                    throw new Error('Route service is busy. Please try again in a moment.');
-                }
-                throw new Error(`Route calculation failed (HTTP ${response.status})`);
+    for (let i = 0; i < waypoints.length; i++) {
+        const wp = waypoints[i];
+        if (!wp || typeof wp.lat !== 'number' || typeof wp.lng !== 'number') {
+            return { valid: false, error: `Invalid coordinates for waypoint ${i + 1}. Please re-enter the address.` };
+        }
+        if (wp.lat < -90 || wp.lat > 90 || wp.lng < -180 || wp.lng > 180) {
+            return { valid: false, error: `Coordinates out of range for waypoint ${i + 1}. Please re-enter the address.` };
+        }
+        if (isNaN(wp.lat) || isNaN(wp.lng)) {
+            return { valid: false, error: `Invalid coordinates for waypoint ${i + 1}. Please re-enter the address.` };
+        }
+    }
+    
+    return { valid: true };
+}
+
+// Try to calculate route using a specific server
+async function tryRouteServer(serverUrl, coords, timeoutMs = 20000) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    
+    try {
+        const url = `${serverUrl}/route/v1/driving/${coords}?overview=full&geometries=geojson`;
+        console.log(`Trying routing server: ${serverUrl}`);
+        
+        const response = await fetch(url, {
+            signal: controller.signal,
+            headers: {
+                'Accept': 'application/json'
             }
-            
-            const data = await response.json();
-            
-            if (data.code === 'NoRoute') {
-                throw new Error('No driving route found between these locations. Please check if the locations are accessible by road.');
-            }
-            
-            if (data.code === 'InvalidInput') {
-                throw new Error('Invalid location coordinates. Please re-enter the addresses.');
-            }
-            
-            if (data.code !== 'Ok' || !data.routes || data.routes.length === 0) {
-                throw new Error('Could not calculate route. The routing service returned an unexpected response.');
-            }
-            
-            return {
-                duration: data.routes[0].duration, // seconds
-                distance: data.routes[0].distance, // meters
-                geometry: data.routes[0].geometry
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+            const errorInfo = {
+                status: response.status,
+                statusText: response.statusText,
+                server: serverUrl
             };
-        } catch (error) {
-            console.error(`Route calculation error (attempt ${attempt + 1}):`, error);
             
-            // Handle timeout/network errors
-            if (error.name === 'TimeoutError' || error.name === 'AbortError') {
-                if (attempt < retries) {
-                    await new Promise(resolve => setTimeout(resolve, 1000));
-                    continue;
-                }
-                throw new Error('Route calculation timed out. Please check your internet connection and try again.');
+            if (response.status === 429) {
+                return { success: false, retryable: true, error: 'Rate limited', errorInfo };
+            }
+            if (response.status >= 500) {
+                return { success: false, retryable: true, error: 'Server error', errorInfo };
+            }
+            if (response.status === 400) {
+                return { success: false, retryable: false, error: 'Invalid request', errorInfo };
             }
             
-            // Handle fetch errors (no internet)
-            if (error.name === 'TypeError' && error.message.includes('fetch')) {
-                throw new Error('Network error. Please check your internet connection and try again.');
+            return { success: false, retryable: true, error: `HTTP ${response.status}`, errorInfo };
+        }
+        
+        const data = await response.json();
+        
+        // Handle OSRM-specific error codes
+        if (data.code === 'NoRoute') {
+            return { 
+                success: false, 
+                retryable: false, 
+                error: 'No driving route exists between these locations. They may be on different landmasses or not accessible by road.'
+            };
+        }
+        
+        if (data.code === 'NoSegment') {
+            return { 
+                success: false, 
+                retryable: false, 
+                error: 'One or more locations are too far from a road. Please choose locations closer to roads.'
+            };
+        }
+        
+        if (data.code === 'InvalidInput' || data.code === 'InvalidQuery') {
+            return { 
+                success: false, 
+                retryable: false, 
+                error: 'Invalid location coordinates. Please re-enter the addresses.'
+            };
+        }
+        
+        if (data.code === 'TooBig') {
+            return { 
+                success: false, 
+                retryable: false, 
+                error: 'Route is too long. Please reduce the number of destinations or choose closer locations.'
+            };
+        }
+        
+        if (data.code !== 'Ok' || !data.routes || data.routes.length === 0) {
+            return { 
+                success: false, 
+                retryable: true, 
+                error: `Unexpected response from routing service: ${data.code || 'No routes returned'}`
+            };
+        }
+        
+        // Success!
+        return {
+            success: true,
+            data: {
+                duration: data.routes[0].duration,
+                distance: data.routes[0].distance,
+                geometry: data.routes[0].geometry
+            }
+        };
+        
+    } catch (error) {
+        clearTimeout(timeoutId);
+        
+        if (error.name === 'AbortError') {
+            return { 
+                success: false, 
+                retryable: true, 
+                error: 'Request timed out',
+                errorInfo: { server: serverUrl, timeout: timeoutMs }
+            };
+        }
+        
+        if (error.name === 'TypeError') {
+            // Network error (CORS, DNS, connection refused, etc.)
+            return { 
+                success: false, 
+                retryable: true, 
+                error: 'Network error',
+                errorInfo: { server: serverUrl, message: error.message }
+            };
+        }
+        
+        return { 
+            success: false, 
+            retryable: true, 
+            error: error.message || 'Unknown error',
+            errorInfo: { server: serverUrl }
+        };
+    }
+}
+
+// Calculate a fallback route using straight-line distances when routing fails
+function calculateFallbackRoute(waypoints) {
+    let totalDistance = 0;
+    const coordinates = [];
+    
+    for (let i = 0; i < waypoints.length; i++) {
+        coordinates.push([waypoints[i].lng, waypoints[i].lat]);
+        
+        if (i > 0) {
+            totalDistance += calculateDistance(
+                waypoints[i-1].lat, waypoints[i-1].lng,
+                waypoints[i].lat, waypoints[i].lng
+            ) * 1000; // Convert km to meters
+        }
+    }
+    
+    // Estimate duration using fallback average speed
+    const estimatedDuration = (totalDistance / 1000) / FALLBACK_AVERAGE_SPEED_KMH * 3600; // seconds
+    
+    return {
+        duration: estimatedDuration,
+        distance: totalDistance,
+        geometry: {
+            type: 'LineString',
+            coordinates: coordinates
+        },
+        isFallback: true
+    };
+}
+
+// Main route calculation function with comprehensive error handling
+async function calculateRoute(waypoints, options = {}) {
+    const { maxRetries = 2, useFallback = true } = options;
+    
+    // Step 1: Validate waypoints
+    const validation = validateWaypoints(waypoints);
+    if (!validation.valid) {
+        throw new Error(validation.error);
+    }
+    
+    // Step 2: Check browser online status
+    if (!isOnline()) {
+        if (useFallback) {
+            showToast('Offline: Using estimated route', 'warning');
+            return calculateFallbackRoute(waypoints);
+        }
+        throw new Error('You appear to be offline. Please check your internet connection and try again.');
+    }
+    
+    // Step 3: Build coordinates string
+    const coords = waypoints.map(wp => `${wp.lng.toFixed(6)},${wp.lat.toFixed(6)}`).join(';');
+    
+    // Step 4: Try each routing server with retries
+    const errors = [];
+    
+    for (const serverUrl of ROUTING_SERVERS) {
+        for (let attempt = 0; attempt <= maxRetries; attempt++) {
+            const result = await tryRouteServer(serverUrl, coords);
+            
+            if (result.success) {
+                console.log(`Route calculated successfully using ${serverUrl}`);
+                return result.data;
             }
             
-            // Re-throw specific errors
-            if (error.message && !error.message.includes('Route calculation')) {
-                throw error;
+            errors.push({
+                server: serverUrl,
+                attempt: attempt + 1,
+                error: result.error,
+                errorInfo: result.errorInfo
+            });
+            
+            // Don't retry non-retryable errors
+            if (!result.retryable) {
+                console.warn(`Non-retryable error from ${serverUrl}:`, result.error);
+                break;
             }
             
-            // Last attempt failed
-            if (attempt >= retries) {
-                throw new Error('Could not calculate route. Please check your internet connection and try again.');
+            // Wait before retry with exponential backoff
+            if (attempt < maxRetries) {
+                const waitTime = Math.min(1000 * Math.pow(2, attempt), 5000);
+                console.log(`Retrying in ${waitTime}ms...`);
+                await new Promise(resolve => setTimeout(resolve, waitTime));
             }
         }
     }
     
-    throw new Error('Could not calculate route after multiple attempts. Please try again later.');
+    // Step 5: All servers failed - analyze errors and provide helpful message
+    console.error('All routing attempts failed:', errors);
+    
+    // Check if all errors are network-related
+    const allNetworkErrors = errors.every(e => 
+        e.error === 'Network error' || 
+        e.error === 'Request timed out'
+    );
+    
+    if (allNetworkErrors) {
+        // Double-check network connectivity
+        const hasConnectivity = await testNetworkConnectivity();
+        
+        if (!hasConnectivity) {
+            if (useFallback) {
+                showToast('Network issue: Using estimated route', 'warning');
+                return calculateFallbackRoute(waypoints);
+            }
+            throw new Error('Unable to connect to routing services. Please check your internet connection and try again.');
+        } else {
+            // Network works but routing servers are down
+            if (useFallback) {
+                showToast('Routing servers unavailable: Using estimated route', 'warning');
+                return calculateFallbackRoute(waypoints);
+            }
+            throw new Error('Routing services are temporarily unavailable. Please try again in a few minutes.');
+        }
+    }
+    
+    // Check for specific non-retryable errors
+    const nonRetryableError = errors.find(e => 
+        e.error.includes('No driving route') ||
+        e.error.includes('too far from a road') ||
+        e.error.includes('Invalid location') ||
+        e.error.includes('too long')
+    );
+    
+    if (nonRetryableError) {
+        throw new Error(nonRetryableError.error);
+    }
+    
+    // Check if rate limited
+    const rateLimited = errors.some(e => e.error === 'Rate limited');
+    if (rateLimited) {
+        throw new Error('Route calculation service is busy. Please wait a moment and try again.');
+    }
+    
+    // Generic fallback error
+    if (useFallback) {
+        showToast('Route calculation failed: Using estimated route', 'warning');
+        return calculateFallbackRoute(waypoints);
+    }
+    
+    throw new Error('Unable to calculate route. Please verify your destinations and try again.');
 }
 
 // ===================================
@@ -930,10 +1193,14 @@ function displayResults(optimizedOrder, optimizedRoute, originalRoute) {
     // Calculate time saved
     const timeSaved = Math.max(0, originalRoute.duration - optimizedRoute.duration);
     
+    // Check if using fallback/estimated route
+    const isEstimated = optimizedRoute.isFallback || originalRoute.isFallback;
+    const estimateSuffix = isEstimated ? ' (est.)' : '';
+    
     // Update stats
-    elements.optimizedTime.textContent = formatDuration(optimizedRoute.duration);
-    elements.timeSaved.textContent = formatDuration(timeSaved);
-    elements.totalDistance.textContent = formatDistance(optimizedRoute.distance);
+    elements.optimizedTime.textContent = formatDuration(optimizedRoute.duration) + estimateSuffix;
+    elements.timeSaved.textContent = formatDuration(timeSaved) + estimateSuffix;
+    elements.totalDistance.textContent = formatDistance(optimizedRoute.distance) + estimateSuffix;
     
     // Update optimized order list
     elements.optimizedOrderList.innerHTML = '';
@@ -968,7 +1235,12 @@ function displayResults(optimizedOrder, optimizedRoute, originalRoute) {
     // Scroll to results
     elements.resultsSection.scrollIntoView({ behavior: 'smooth' });
     
-    showToast('Route optimized!', 'success');
+    // Show appropriate toast message
+    if (isEstimated) {
+        showToast('Route optimized (estimated times - check Google Maps for accuracy)', 'warning');
+    } else {
+        showToast('Route optimized!', 'success');
+    }
 }
 
 function formatDuration(seconds) {
