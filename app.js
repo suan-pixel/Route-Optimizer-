@@ -209,7 +209,7 @@ async function searchLocation(query, nearLat = null, nearLng = null) {
 async function estimateDrivingTime(fromLat, fromLng, toLat, toLng) {
     const coords = `${fromLng.toFixed(6)},${fromLat.toFixed(6)};${toLng.toFixed(6)},${toLat.toFixed(6)}`;
     
-    // Try each routing server
+    // Try each OSRM routing server
     for (const serverUrl of ROUTING_SERVERS) {
         try {
             const controller = new AbortController();
@@ -237,6 +237,45 @@ async function estimateDrivingTime(fromLat, fromLng, toLat, toLng) {
             console.warn(`Driving time estimation failed for ${serverUrl}:`, error.message);
             // Continue to next server
         }
+    }
+    
+    // Try Valhalla as fallback
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+        
+        const requestBody = {
+            locations: [
+                { lat: fromLat, lon: fromLng },
+                { lat: toLat, lon: toLng }
+            ],
+            costing: 'auto',
+            directions_options: { units: 'kilometers' }
+        };
+        
+        const response = await fetch(VALHALLA_SERVER, {
+            method: 'POST',
+            signal: controller.signal,
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify(requestBody)
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (response.ok) {
+            const data = await response.json();
+            if (data.trip && data.trip.summary) {
+                return {
+                    duration: data.trip.summary.time, // seconds
+                    distance: data.trip.summary.length * 1000  // convert km to meters
+                };
+            }
+        }
+    } catch (error) {
+        console.warn('Valhalla driving time estimation failed:', error.message);
     }
     
     // Fallback: estimate using straight-line distance and average speed
@@ -890,6 +929,9 @@ const ROUTING_SERVERS = [
     'https://routing.openstreetmap.de/routed-car'
 ];
 
+// Valhalla routing server (more reliable alternative with different API format)
+const VALHALLA_SERVER = 'https://valhalla1.openstreetmap.de/route';
+
 // Fallback speed assumptions for route estimation when routing services are unavailable
 const FALLBACK_AVERAGE_SPEED_KMH = 45; // Average urban/suburban driving speed in km/h
 
@@ -1063,6 +1105,179 @@ async function tryRouteServer(serverUrl, coords, timeoutMs = 30000) {
     }
 }
 
+// Try to calculate route using Valhalla API (different format than OSRM)
+async function tryValhallaServer(waypoints, timeoutMs = 30000) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    
+    try {
+        // Build Valhalla request body
+        const locations = waypoints.map(wp => ({
+            lat: wp.lat,
+            lon: wp.lng
+        }));
+        
+        const requestBody = {
+            locations: locations,
+            costing: 'auto',
+            directions_options: {
+                units: 'kilometers'
+            }
+        };
+        
+        console.log('Trying Valhalla routing server:', VALHALLA_SERVER);
+        
+        const response = await fetch(VALHALLA_SERVER, {
+            method: 'POST',
+            signal: controller.signal,
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify(requestBody)
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+            const errorInfo = {
+                status: response.status,
+                statusText: response.statusText,
+                server: VALHALLA_SERVER
+            };
+            
+            if (response.status === 429) {
+                return { success: false, retryable: true, error: 'Rate limited', errorInfo };
+            }
+            if (response.status >= 500) {
+                return { success: false, retryable: true, error: 'Server error', errorInfo };
+            }
+            
+            return { success: false, retryable: true, error: `HTTP ${response.status}`, errorInfo };
+        }
+        
+        const data = await response.json();
+        
+        // Handle Valhalla-specific error codes
+        if (data.error_code) {
+            const errorMessages = {
+                171: 'No route exists between these locations.',
+                154: 'Path distance exceeds the maximum allowed.',
+                106: 'Invalid location coordinates.'
+            };
+            return {
+                success: false,
+                retryable: false,
+                error: errorMessages[data.error_code] || data.error || 'Valhalla routing error'
+            };
+        }
+        
+        if (!data.trip || !data.trip.legs || data.trip.legs.length === 0) {
+            return {
+                success: false,
+                retryable: true,
+                error: 'No route data returned from Valhalla'
+            };
+        }
+        
+        // Extract route data from Valhalla response
+        // Valhalla returns duration in seconds and distance in the units requested
+        const trip = data.trip;
+        const totalDuration = trip.summary.time; // seconds
+        const totalDistance = trip.summary.length * 1000; // convert km to meters
+        
+        // Decode Valhalla's encoded polyline to GeoJSON
+        const coordinates = [];
+        for (const leg of trip.legs) {
+            if (leg.shape) {
+                const decoded = decodeValhallaPolyline(leg.shape);
+                coordinates.push(...decoded);
+            }
+        }
+        
+        // Success!
+        return {
+            success: true,
+            data: {
+                duration: totalDuration,
+                distance: totalDistance,
+                geometry: {
+                    type: 'LineString',
+                    coordinates: coordinates
+                }
+            }
+        };
+        
+    } catch (error) {
+        clearTimeout(timeoutId);
+        
+        if (error.name === 'AbortError') {
+            return { 
+                success: false, 
+                retryable: true, 
+                error: 'Request timed out',
+                errorInfo: { server: VALHALLA_SERVER, timeout: timeoutMs }
+            };
+        }
+        
+        if (error.name === 'TypeError') {
+            return { 
+                success: false, 
+                retryable: true, 
+                error: 'Network error',
+                errorInfo: { server: VALHALLA_SERVER, message: error.message }
+            };
+        }
+        
+        return { 
+            success: false, 
+            retryable: true, 
+            error: error.message || 'Unknown error',
+            errorInfo: { server: VALHALLA_SERVER }
+        };
+    }
+}
+
+// Decode Valhalla's polyline6 encoded geometry
+function decodeValhallaPolyline(encoded) {
+    const coordinates = [];
+    let index = 0;
+    let lat = 0;
+    let lng = 0;
+    
+    while (index < encoded.length) {
+        let b;
+        let shift = 0;
+        let result = 0;
+        
+        do {
+            b = encoded.charCodeAt(index++) - 63;
+            result |= (b & 0x1f) << shift;
+            shift += 5;
+        } while (b >= 0x20);
+        
+        const dlat = ((result & 1) ? ~(result >> 1) : (result >> 1));
+        lat += dlat;
+        
+        shift = 0;
+        result = 0;
+        
+        do {
+            b = encoded.charCodeAt(index++) - 63;
+            result |= (b & 0x1f) << shift;
+            shift += 5;
+        } while (b >= 0x20);
+        
+        const dlng = ((result & 1) ? ~(result >> 1) : (result >> 1));
+        lng += dlng;
+        
+        // Valhalla uses 6 decimal places precision (1e6)
+        coordinates.push([lng / 1e6, lat / 1e6]);
+    }
+    
+    return coordinates;
+}
+
 // Calculate a fallback route using straight-line distances when routing fails
 function calculateFallbackRoute(waypoints) {
     let totalDistance = 0;
@@ -1146,6 +1361,37 @@ async function calculateRoute(waypoints, options = {}) {
                 console.log(`Retrying in ${waitTime}ms...`);
                 await new Promise(resolve => setTimeout(resolve, waitTime));
             }
+        }
+    }
+    
+    // Step 4b: Try Valhalla as an alternative routing server (different API format)
+    console.log('OSRM servers failed, trying Valhalla...');
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        const valhallaResult = await tryValhallaServer(waypoints);
+        
+        if (valhallaResult.success) {
+            console.log('Route calculated successfully using Valhalla');
+            return valhallaResult.data;
+        }
+        
+        errors.push({
+            server: VALHALLA_SERVER,
+            attempt: attempt + 1,
+            error: valhallaResult.error,
+            errorInfo: valhallaResult.errorInfo
+        });
+        
+        // Don't retry non-retryable errors
+        if (!valhallaResult.retryable) {
+            console.warn('Non-retryable error from Valhalla:', valhallaResult.error);
+            break;
+        }
+        
+        // Wait before retry
+        if (attempt < maxRetries) {
+            const waitTime = Math.min(1000 * Math.pow(2, attempt), 5000);
+            console.log(`Retrying Valhalla in ${waitTime}ms...`);
+            await new Promise(resolve => setTimeout(resolve, waitTime));
         }
     }
     
