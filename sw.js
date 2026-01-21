@@ -53,10 +53,11 @@ self.addEventListener('fetch', (event) => {
         return;
     }
     
-    // For API calls (Nominatim, OSRM), always use network
+    // For API calls (Nominatim, OSRM, Valhalla), always use network
     if (url.hostname.includes('nominatim') || 
         url.hostname.includes('osrm') ||
-        url.hostname.includes('router.project-osrm')) {
+        url.hostname.includes('router.project-osrm') ||
+        url.hostname.includes('valhalla')) {
         event.respondWith(
             fetch(request)
                 .catch(() => {
