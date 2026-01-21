@@ -250,46 +250,69 @@ async function estimateDrivingTime(fromLat, fromLng, toLat, toLng) {
 
 // Search for locations with driving time estimates
 async function searchLocationWithTimes(query, nearLat, nearLng) {
-    const results = await searchLocation(query, nearLat, nearLng);
-    
-    if (!nearLat || !nearLng || results.length === 0) {
-        return results;
-    }
-    
-    // Get driving times for top results (limit to 3 to avoid overwhelming the API)
-    const topResults = results.slice(0, 3);
-    
-    // Process sequentially with a small delay to avoid rate limiting
-    const resultsWithTimes = [];
-    for (let i = 0; i < topResults.length; i++) {
-        const result = topResults[i];
-        const timeInfo = await estimateDrivingTime(
-            nearLat, nearLng,
-            parseFloat(result.lat), parseFloat(result.lon)
-        );
-        resultsWithTimes.push({
-            ...result,
-            drivingTime: timeInfo ? timeInfo.duration : null,
-            drivingDistance: timeInfo ? timeInfo.distance : null
+    try {
+        const results = await searchLocation(query, nearLat, nearLng);
+        
+        if (results.length === 0) {
+            // Truncate query to prevent potential issues with very long inputs
+            const truncatedQuery = query.length > 50 ? query.substring(0, 50) + '...' : query;
+            throw new Error(`Location "${truncatedQuery}" not found. Please try a different address or be more specific.`);
+        }
+        
+        if (!nearLat || !nearLng) {
+            return results;
+        }
+        
+        // Get driving times for top results (limit to 3 to avoid overwhelming the API)
+        const topResults = results.slice(0, 3);
+        
+        // Process sequentially with a small delay to avoid rate limiting
+        const resultsWithTimes = [];
+        for (let i = 0; i < topResults.length; i++) {
+            const result = topResults[i];
+            try {
+                const timeInfo = await estimateDrivingTime(
+                    nearLat, nearLng,
+                    parseFloat(result.lat), parseFloat(result.lon)
+                );
+                resultsWithTimes.push({
+                    ...result,
+                    drivingTime: timeInfo ? timeInfo.duration : null,
+                    drivingDistance: timeInfo ? timeInfo.distance : null,
+                    isEstimate: timeInfo ? timeInfo.isEstimate : false
+                });
+            } catch (error) {
+                console.warn(`Failed to estimate driving time for ${result.display_name}:`, error);
+                // Still include the result, but mark it as having no timing data
+                resultsWithTimes.push({
+                    ...result,
+                    drivingTime: null,
+                    drivingDistance: null,
+                    hasTimingData: false
+                });
+            }
+            
+            // Add small delay between requests to be respectful to the API
+            if (i < topResults.length - 1) {
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+        }
+        
+        // Sort by driving time (fallback to straight-line distance if time unavailable)
+        resultsWithTimes.sort((a, b) => {
+            if (a.drivingTime !== null && b.drivingTime !== null) {
+                return a.drivingTime - b.drivingTime;
+            }
+            if (a.drivingTime !== null) return -1;
+            if (b.drivingTime !== null) return 1;
+            return (a.straightLineDistance || 0) - (b.straightLineDistance || 0);
         });
         
-        // Add small delay between requests to be respectful to the API
-        if (i < topResults.length - 1) {
-            await new Promise(resolve => setTimeout(resolve, 100));
-        }
+        return resultsWithTimes;
+    } catch (error) {
+        console.error('searchLocationWithTimes error:', error);
+        throw error;
     }
-    
-    // Sort by driving time (fallback to straight-line distance if time unavailable)
-    resultsWithTimes.sort((a, b) => {
-        if (a.drivingTime !== null && b.drivingTime !== null) {
-            return a.drivingTime - b.drivingTime;
-        }
-        if (a.drivingTime !== null) return -1;
-        if (b.drivingTime !== null) return 1;
-        return (a.straightLineDistance || 0) - (b.straightLineDistance || 0);
-    });
-    
-    return resultsWithTimes;
 }
 
 // ===================================
@@ -919,7 +942,7 @@ function validateWaypoints(waypoints) {
 }
 
 // Try to calculate route using a specific server
-async function tryRouteServer(serverUrl, coords, timeoutMs = 20000) {
+async function tryRouteServer(serverUrl, coords, timeoutMs = 30000) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
     
@@ -1141,17 +1164,17 @@ async function calculateRoute(waypoints, options = {}) {
         
         if (!hasConnectivity) {
             if (useFallback) {
-                showToast('Network issue: Using estimated route', 'warning');
+                showToast('No internet connection detected. Using estimated route based on straight-line distances.', 'warning');
                 return calculateFallbackRoute(waypoints);
             }
-            throw new Error('Unable to connect to routing services. Please check your internet connection and try again.');
+            throw new Error('No internet connection detected. Please check your network settings and try again.');
         } else {
             // Network works but routing servers are down
             if (useFallback) {
-                showToast('Routing servers unavailable: Using estimated route', 'warning');
+                showToast('Routing services are currently unavailable. Using estimated route based on straight-line distances.', 'warning');
                 return calculateFallbackRoute(waypoints);
             }
-            throw new Error('Routing services are temporarily unavailable. Please try again in a few minutes.');
+            throw new Error('The routing service is currently unavailable (not your internet). Please try again in a few minutes or use the estimated route.');
         }
     }
     
@@ -1170,16 +1193,20 @@ async function calculateRoute(waypoints, options = {}) {
     // Check if rate limited
     const rateLimited = errors.some(e => e.error === 'Rate limited');
     if (rateLimited) {
+        if (useFallback) {
+            showToast('Route calculation service is busy. Using estimated route.', 'warning');
+            return calculateFallbackRoute(waypoints);
+        }
         throw new Error('Route calculation service is busy. Please wait a moment and try again.');
     }
     
     // Generic fallback error
     if (useFallback) {
-        showToast('Route calculation failed: Using estimated route', 'warning');
+        showToast('Unable to calculate exact route. Using estimated route based on straight-line distances.', 'warning');
         return calculateFallbackRoute(waypoints);
     }
     
-    throw new Error('Unable to calculate route. Please verify your destinations and try again.');
+    throw new Error('Unable to calculate route. Please verify your destinations and try again. You may also try refreshing the page.');
 }
 
 // ===================================
