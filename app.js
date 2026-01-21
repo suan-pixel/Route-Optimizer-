@@ -932,6 +932,13 @@ const ROUTING_SERVERS = [
 // Valhalla routing server (more reliable alternative with different API format)
 const VALHALLA_SERVER = 'https://valhalla1.openstreetmap.de/route';
 
+// Valhalla error code mappings for user-friendly messages
+const VALHALLA_ERROR_MESSAGES = {
+    171: 'No route exists between these locations.',
+    154: 'Path distance exceeds the maximum allowed.',
+    106: 'Invalid location coordinates.'
+};
+
 // Fallback speed assumptions for route estimation when routing services are unavailable
 const FALLBACK_AVERAGE_SPEED_KMH = 45; // Average urban/suburban driving speed in km/h
 
@@ -1105,13 +1112,19 @@ async function tryRouteServer(serverUrl, coords, timeoutMs = 30000) {
     }
 }
 
-// Try to calculate route using Valhalla API (different format than OSRM)
+/**
+ * Try to calculate route using Valhalla API (different format than OSRM)
+ * Valhalla uses POST requests with JSON body instead of URL parameters
+ * @param {Array<{lat: number, lng: number}>} waypoints - Array of waypoints with lat/lng coordinates
+ * @param {number} timeoutMs - Request timeout in milliseconds (default: 30000)
+ * @returns {Promise<{success: boolean, data?: {duration: number, distance: number, geometry: object}, error?: string, retryable?: boolean, errorInfo?: object}>}
+ */
 async function tryValhallaServer(waypoints, timeoutMs = 30000) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
     
     try {
-        // Build Valhalla request body
+        // Build Valhalla request body (uses 'lon' not 'lng')
         const locations = waypoints.map(wp => ({
             lat: wp.lat,
             lon: wp.lng
@@ -1158,17 +1171,12 @@ async function tryValhallaServer(waypoints, timeoutMs = 30000) {
         
         const data = await response.json();
         
-        // Handle Valhalla-specific error codes
+        // Handle Valhalla-specific error codes using the module-level constant
         if (data.error_code) {
-            const errorMessages = {
-                171: 'No route exists between these locations.',
-                154: 'Path distance exceeds the maximum allowed.',
-                106: 'Invalid location coordinates.'
-            };
             return {
                 success: false,
                 retryable: false,
-                error: errorMessages[data.error_code] || data.error || 'Valhalla routing error'
+                error: VALHALLA_ERROR_MESSAGES[data.error_code] || data.error || 'Valhalla routing error'
             };
         }
         
@@ -1238,7 +1246,13 @@ async function tryValhallaServer(waypoints, timeoutMs = 30000) {
     }
 }
 
-// Decode Valhalla's polyline6 encoded geometry
+/**
+ * Decode Valhalla's polyline6 encoded geometry
+ * Valhalla uses polyline6 encoding with 6 decimal places precision (1e6)
+ * This is higher precision than Google's standard polyline encoding (5 decimals, 1e5)
+ * @param {string} encoded - The encoded polyline string from Valhalla API
+ * @returns {Array<[number, number]>} Array of [lng, lat] coordinate pairs (GeoJSON format)
+ */
 function decodeValhallaPolyline(encoded) {
     const coordinates = [];
     let index = 0;
