@@ -254,7 +254,9 @@ async function searchLocationWithTimes(query, nearLat, nearLng) {
         const results = await searchLocation(query, nearLat, nearLng);
         
         if (results.length === 0) {
-            throw new Error(`Location "${query}" not found. Please try a different address or be more specific.`);
+            // Truncate query to prevent potential issues with very long inputs
+            const truncatedQuery = query.length > 50 ? query.substring(0, 50) + '...' : query;
+            throw new Error(`Location "${truncatedQuery}" not found. Please try a different address or be more specific.`);
         }
         
         if (!nearLat || !nearLng) {
@@ -281,12 +283,12 @@ async function searchLocationWithTimes(query, nearLat, nearLng) {
                 });
             } catch (error) {
                 console.warn(`Failed to estimate driving time for ${result.display_name}:`, error);
-                // Still include the result, just without driving time
+                // Still include the result, but mark it as having no timing data
                 resultsWithTimes.push({
                     ...result,
                     drivingTime: null,
                     drivingDistance: null,
-                    isEstimate: true
+                    hasTimingData: false
                 });
             }
             
@@ -885,9 +887,7 @@ function toRad(deg) {
 // These are well-established public OSRM instances
 const ROUTING_SERVERS = [
     'https://router.project-osrm.org',
-    'https://routing.openstreetmap.de/routed-car',
-    // Additional fallback using router.project-osrm.org mirror endpoints
-    'http://router.project-osrm.org' // HTTP fallback (some networks block HTTPS)
+    'https://routing.openstreetmap.de/routed-car'
 ];
 
 // Fallback speed assumptions for route estimation when routing services are unavailable
